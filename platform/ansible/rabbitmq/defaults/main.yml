@@ -1,0 +1,92 @@
+---
+# defaults file for rabbitmq
+rabbitmq_manage: true
+rabbitmq_cluster: true
+rabbitmq_create_user: true
+
+# Cluster information
+# RabbitMQ (erlang.cookie)
+rabbitmq_nodename: "rabbit"
+
+#Below variable unused in current broker
+rabbitmq_nodename_suffix: .compute.internal
+rabbitmq_ec2_tag_key: Name
+rabbitmq_ec2_tag_value: rabbitmq-dev-team7
+# Either 'all' or specific region, e.g. 'eu-central-1'
+
+
+# Yum Version Lock Using Below ansible,rabbitmq-server and erlang version
+ansible_version : 2.7.0
+rabbitmq: rabbitmq-server-3.7.8-1.el7.noarch.rpm
+erlang: erlang-21.0.9-1.el7.centos.x86_64.rpm
+
+rabbitmq_version: rabbitmq-server-3.7.14-1.el7
+erlang_version: erlang-21.3.4-1.el7.centos.x86_64
+
+rabbitmq_cluster_bootup_play: false
+
+# Plugins
+rabbitmq_custom_plugins: []
+# RabbitMQ Disk VLM Parameter
+vg_name: rabbitmqvg
+lv_name: rabbitmqlv
+vg_pvs: ['sdf']
+
+# RabbitMQ user premissions
+rabbitmq_configure_priv: .*
+rabbitmq_read_priv: .*
+rabbitmq_write_priv: .*
+rabbitmq_user_state: present
+
+# RabbitMQ (rabbitmq.config)
+rabbitmq_amqp_port: 5672
+# Maximum number of channels to negotiate with clients.
+  # Setting to 0 means "unlimited":
+rabbitmq_max_channels: 0
+
+rabbitmq_loopback_users: []
+rabbitmq_default_vhost: /
+rabbitmq_default_user_tags:
+  - administrator
+
+# Customized for Siemens
+cluster_partition_handling: pause_minority
+rabbitmq_disk_free_limit: 100MB
+rabbitmq_high_watermark: 0.7
+rabbitmq_high_watermark_paging: 0.5
+use_long_name: true
+mnesia_dir: "/data/rabbitmq"
+rabbit_peer_discovery_aws: rabbit_peer_discovery_aws
+use_autoscaling_group: true
+plugin_dir: /usr/lib/rabbitmq/lib/rabbitmq_server-3.7.7/plugins/
+useprivate: true
+hipe_compile: true
+mqtt_allow_anonymous: false
+mqtt_subscription_ttl: 86400000
+mqtt_tcp_listen_options_sndbuf: 16384
+mqtt_tcp_listen_options_recbuf: 16384
+mqtt_listeners_tcp_default: 1883
+mqtt_listeners_ssl: none
+mqtt_tcp_listen_options_backlog: 8192
+mqtt_tcp_listen_options_nodelay: true
+mqtt_tcp_listen_options_linger_timeout: 0
+mqtt_tcp_listen_options_linger_on: true
+auth_backends_1: internal
+auth_backends_2: cache
+auth_cache_cached_backend: http
+auth_http_http_method: post
+num_acceptors_tcp: 50
+auth_cache: 3600000
+collect_statics: 60000
+
+
+#Broker Log Level Parameter
+rabbitmq_log_level: info
+log_console_level: info
+log_file: rabbit.log
+log_console: true
+log_connection_level: info
+log_channel_level: info
+log_queue_level: info
+log_dir: /var/log/rabbitmq
+

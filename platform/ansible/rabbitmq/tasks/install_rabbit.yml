@@ -1,0 +1,235 @@
+# Tasks for installing and configuring RabbitMQ and custom plugins on the system
+- name: Copy Yum Version Lock File
+  copy:
+    src: versionlock.conf
+    dest: /etc/yum/pluginconf.d/versionlock.conf
+
+# See https://www.rabbitmq.com/install-debian.html
+- name: Add YUM version pinning config for Erlang, to avoid upgrading to versions unsupported by RabbitMQ
+  template:
+    src: versionlock.list.j2
+    dest: /etc/yum/pluginconf.d/versionlock.list
+  register: versionlock
+
+- name: Clear Version Lock List When Update
+  shell: yum versionlock clear
+  when: versionlock.changed
+  args:
+    warn: False
+
+
+- name:  RabbitMQ (Centos 7 repo)
+  yum_repository:
+    name: rabbit
+    baseurl: https://packagecloud.io/rabbitmq/rabbitmq-server/el/7/$basearch
+    state: present
+    gpgcheck: no
+    sslverify: yes
+    gpgkey: https://packagecloud.io/rabbitmq/rabbitmq-server/gpgkey
+    repo_gpgcheck: yes
+    file: rabbit
+    enabled: yes
+    sslcacert: /etc/pki/tls/certs/ca-bundle.crt
+    description: RabbitMQ Repo
+    metadata_expire: 300
+    skip_if_unavailable: yes
+
+- name: Add Erlang YUM repo, dependency for RabbitMQ (Centos repo)
+  yum_repository:
+    name: erlang
+    file: rabbit
+    description: Erlang Repository
+    baseurl: https://packagecloud.io/rabbitmq/erlang/el/7/$basearch
+    state: present
+    gpgcheck: no
+    sslverify: yes
+    gpgkey: https://packagecloud.io/rabbitmq/erlang/gpgkey
+    repo_gpgcheck: yes
+    sslcacert: /etc/pki/tls/certs/ca-bundle.crt
+    metadata_expire: 300
+    enabled: yes
+    skip_if_unavailable: yes
+
+#- name: add the repository keys
+#  rpm_key:
+#    key: "{{ item }}"
+#    state: present
+#  with_items:
+#  - https://packagecloud.io/rabbitmq/rabbitmq-server/gpgkey
+#  - https://packagecloud.io/rabbitmq/erlang/gpgkey
+#  tags:
+#  - gpgkeys
+
+- name: Install rabbitmq-server package (from RabbitMQ repo)
+  yum:
+    name: ["{{ rabbitmq_version }}", "{{ erlang_version }}"]
+    state: present
+    allow_downgrade: yes
+    update_cache: no
+    disablerepo: "epel"
+    enablerepo: "rabbit,erlang"
+  register: rabbitmqoutput
+  ignore_errors: yes
+
+- rpm_key:
+    state: present
+    key: /etc/ansible/roles/rabbitmq/files/rabbitmq-release-signing-key.asc
+
+- name: install rabbitmq and erlang rpm from a local file
+  yum:
+    name: ['/etc/ansible/roles/rabbitmq/files/{{ rabbitmq }}', '/etc/ansible/roles/rabbitmq/files/{{ erlang }}']
+    state: present
+    allow_downgrade: yes
+    update_cache: yes
+  when: rabbitmqoutput|failed
+
+
+- name: Add YUM version pinning config for Erlang, to avoid upgrading to versions unsupported by RabbitMQ 2
+  template:
+    src: versionlock.list.j2
+    dest: /etc/yum/pluginconf.d/versionlock.list
+  register: versionlock
+  changed_when: false
+
+
+- name: Change Mount Dir Permission
+  file:
+    path: /data/rabbitmq
+    owner: rabbitmq
+    group: rabbitmq
+    mode: u=rwx,g=rwx,o=rx,g+s
+    state: directory
+  changed_when: false
+
+- name: Change Limit NOFILE value in systemd unit file
+  replace:
+    path: /usr/lib/systemd/system/rabbitmq-server.service
+    regexp: 'LimitNOFILE=32768'
+    replace: 'LimitNOFILE=500000'
+  notify:
+  - rabbitmq-server-reload
+
+
+- name: Define Locale Environment
+  shell: export LC_ALL=en_US.UTF-8
+  changed_when: false
+
+- name: Show hostname for RabbitMQ instance at time of installation
+  shell: "hostname"
+  register: hostname_return
+  changed_when: false
+- debug: msg={{ hostname_return.stdout }}
+
+
+- name: Enable Offline Plugin AutoCluster
+  shell: rabbitmq-plugins --offline enable rabbitmq_peer_discovery_aws
+  changed_when: false
+
+- name: Ensure erlang cookies are the same among all instances
+  template:
+    src: erlang.cookie.j2
+    dest: /var/lib/rabbitmq/.erlang.cookie
+    mode: 0600
+    owner: rabbitmq
+    group: rabbitmq
+  changed_when: false
+
+
+- name: Start rabbitmq-server in order to use the rabbitctl command in next task
+  systemd:
+    name: rabbitmq-server
+    state: started
+
+- name: Enable management plugin
+  rabbitmq_plugin:
+    new_only: yes # keeps previously installed plugins
+    name: rabbitmq_management
+    state: enabled
+  when: rabbitmq_manage
+
+- name: Enable RabbitMQ Required Plugin
+  rabbitmq_plugin:
+    new_only: yes
+    name: '{{ item }}'
+    state: enabled
+  with_items:
+  - rabbitmq_mqtt
+  - rabbitmq_auth_backend_http
+  - rabbitmq_auth_backend_cache
+  - rabbitmq_peer_discovery_aws
+  - rabbitmq_event_exchange
+
+- name: Configure rabbitmq-server
+  template:
+    src: rabbitmq.conf.j2
+    dest: /etc/rabbitmq/rabbitmq.conf
+  register: configchange
+
+
+- name: Stop rabbitmq-server to add config file
+  systemd:
+    name: rabbitmq-server
+    state: stopped
+  when: configchange.changed or rabbitmqenv.changed
+
+- name: Start rabbitmq-server to enable plugins and add users
+  systemd:
+    name: rabbitmq-server
+    state: started
+    enabled: yes
+  when: configchange.changed or rabbitmqenv.changed
+
+
+- name: Stop RabbitMQ Application
+  shell: rabbitmqctl  stop_app
+  when: configchange.changed
+
+- name: Reset RabbitMQ Cluster
+  shell: rabbitmqctl  reset
+  tags:
+    - reset
+  when: configchange.changed or rabbitmqenv.changed
+
+- name: Start RabbitMQ Application
+  shell: rabbitmqctl   start_app
+  when: configchange.changed
+
+- name: Define Locale Environment2
+  shell: export LC_ALL=en_US.UTF-8
+  changed_when: false
+
+- name: delete guest user
+  rabbitmq_user:
+    user: guest
+    state: absent
+    force: yes
+  ignore_errors: yes
+
+- name: Setup rabbitmq user with admin access (no node name, localhost mode)
+  rabbitmq_user:
+    user: "{{ item.key }}"
+    password: "{{ item.value }}"
+    vhost: "{{ rabbitmq_default_vhost }}"
+    configure_priv: "{{ rabbitmq_configure_priv }}"
+    read_priv: "{{ rabbitmq_read_priv }}"
+    write_priv: "{{ rabbitmq_write_priv }}"
+    tags: "{{ rabbitmq_default_user_tags|join(',') }}"
+    state: "{{ rabbitmq_user_state }}"
+    node: "{{ rabbitmq_nodename }}@{{ hostname_return.stdout }}"
+  with_dict : "{{ result.stdout }}"
+  tags:
+  - rabbitmq
+
+- name: Eanable HA-SYNC-ALL
+  rabbitmq_policy:
+    node: "{{ rabbitmq_nodename }}@{{ hostname_return.stdout }}"
+    name: HA Policy
+    vhost: '/'
+    pattern: '.*'
+  args:
+    tags:
+      ha-mode: "all"
+      ha-sync-mode: "automatic"
+      queue-master-locator: "random"
+      queue-mode: "lazy"
+    state: present

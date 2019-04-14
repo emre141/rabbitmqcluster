@@ -1,0 +1,21 @@
+{
+  "dev": {
+    "account_id": "account_id"
+  },
+  "dev_teamlatest": {
+    "account_id": "account_id"
+  },
+  "prod": {
+    "account_id": "account_id"
+  },
+  "prodb": {
+    "account_id": "account_id"
+  },
+  "int": {
+    "account_id": "account_id"
+  },
+  "dev_team8": {
+    "account_id": "account_id"
+  }
+}
+

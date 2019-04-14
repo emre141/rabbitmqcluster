@@ -1,0 +1,14 @@
+---
+# defaults file for cloudwatch-monitoring
+
+cloud_watch_monitoring_path: /opt
+apppath: /data/rabbitmq
+syspath: /
+cron_user: root
+cron_specs:
+- {
+    name: "Cloudwatch monitoring",
+    minute: "*/5",
+    hour: "*",
+    job: "{{ cloud_watch_monitoring_path }}/aws-scripts-mon/mon-put-instance-data.pl --mem-util --mem-used --mem-avail --swap-util --swap-used --disk-space-util --disk-path={{ apppath }} --disk-path={{ syspath }}  --disk-space-avail --from-cron  --auto-scaling=only"
+  }

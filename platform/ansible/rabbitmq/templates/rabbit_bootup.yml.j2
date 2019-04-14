@@ -1,0 +1,69 @@
+---
+
+- name: Playbook to execute on RabbitMQ instance bootup connect to cluster
+  hosts: localhost
+  vars:
+    rabbitmq_cluster: true
+    # Tell rabbitmq role it's invoked by this cluster bootup play:
+    rabbitmq_cluster_bootup_play: true
+    rabbitmq_ec2_region: {{ aws_region }}
+    rabbitmq_ec2_tag_key: {{ rabbitmq_ec2_tag_key }}
+    rabbitmq_ec2_tag_value: {{ rabbitmq_ec2_tag_value }}
+    rabbitmq_amqp_port: {{ rabbitmq_amqp_port }}
+    rabbitmq_custom_plugins: {{ rabbitmq_custom_plugins|to_yaml }}
+    rabbitmq_default_user: {{ rabbitmq_default_user }}
+    rabbitmq_default_pass: {{ rabbitmq_default_pass }}
+  pre_tasks:
+    - name: Change hostname to the FQDN which is used when setting RABBITMQ_USE_LONGNAME
+      hostname:
+        name: "{{ '{{' }} ansible_hostname {{ '}}' }}{{ rabbitmq_nodename_suffix }}"
+
+  roles:
+    - rabbitmq
+  tasks:
+
+    - name: Get server hostnames for clustering
+      ec2_instance_facts:
+        filters:
+          "tag:{{ rabbitmq_ec2_tag_key }}": "{{ rabbitmq_ec2_tag_value }}"
+        region: "{{ aws_region }}"
+      environment:
+        AWS_ACCESS_KEY_ID:      "{{ aws_access_key }}"
+        AWS_SECRET_ACCESS_KEY:  "{{ aws_secret_key }}"
+      register: results
+
+    - name: Get hostname
+      shell: hostname
+      register: hostname_return
+
+    - name: Create fact with rabbit node name
+      set_fact:
+        node_name: "rabbit@{{ '{{' }} hostname_return.stdout {{ '}}' }}"
+
+    - name: Output node name (will be used for rabbitmqctl commands)
+      debug:
+        var: node_name
+
+    - name: Update RabbitMQ ENV config file to new node name
+      lineinfile:
+        path: /etc/rabbitmq/rabbitmq-env.conf
+        regexp: '^NODENAME='
+        line: "NODENAME={{ '{{' }} node_name {{ '}}' }}"
+
+    - name: Turn off rabbitmq but not the erlang process (clustering)
+      command: "{{ '{{' }} item {{ '}}' }}"
+      with_items:
+        - rabbitmqctl -n {{ '{{' }} node_name {{ '}}' }} stop_app
+        - rabbitmqctl -n {{ '{{' }} node_name {{ '}}' }} reset
+
+    - name: Try to join existing cluster (using all known nodes)
+      command: "rabbitmqctl -n {{ '{{' }} node_name {{ '}}' }} join_cluster rabbit@{{ '{{' }} item.private_dns_name {{ '}}' }}"
+      with_items: "{{ '{{' }} results.instances {{ '}}' }}"
+      when:
+        - results.instances is defined
+        - results.instances|length > 0
+        - item.private_dns_name|length > 0
+      ignore_errors: yes
+
+    - name: turn rabbitmq back on
+      command: rabbitmqctl -n {{ '{{' }} node_name {{ '}}' }} start_app

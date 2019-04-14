@@ -1,0 +1,309 @@
+image: docker_image
+
+stages:
+- plan
+- apply
+- update
+- destroy
+
+.common: &common
+  before_script:
+  - export AWS_ACCOUNT_ID=`jq -r .${ENVIRONMENT}.account_id info.json`
+  - terraform --version
+  - terraform init --backend-config "bucket=bucket_name" --backend-config "key=${STATE_FILE}" --backend-config "region=${AWS_REGION}"
+  - terraform get
+  - terraform plan --var-file ${ENVIRONMENT}.tfvars
+  when: manual
+  tags:
+  - runner_tag
+
+.plan_common: &plan_common
+  <<: *common
+  stage: plan
+  script:
+  - echo "plan"
+
+.update_common: &update_common
+  <<: *common
+  stage: update
+  script:
+  - cp platform/health-check/healthcheck.py .
+  - cp platform/ssl-expire-check/sslexpirecheck.py .
+  - zip -r platform/health-check/healthcheck.zip healthcheck.py
+  - zip -r platform/ssl-expire-check/sslexpirecheck.zip sslexpirecheck.py
+  - terraform apply --var-file ${ENVIRONMENT}.tfvars
+  - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+  - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+  - aws configure set region $AWS_REGION
+  - export asg_instance_tag=`terraform output asg_instance_tag`
+  - export ssm_doc_name=`terraform output ssm_doc_name`
+  - export s3_bucket_name=`terraform output s3_bucket_name`
+  - export s3_key_prefix=`terraform output s3_key_prefix`
+  - aws ssm send-command --document-name "${ssm_doc_name}"
+    --targets '{"Key":"tag:Name","Values":["'"${asg_instance_tag}"'"]}'
+    --parameters '{}' --timeout-seconds 600
+    --output-s3-bucket-name "${s3_bucket_name}"
+    --output-s3-key-prefix "${s3_key_prefix}" --region region_name
+
+.apply_common: &apply_common
+  <<: *common
+  script:
+  - cp platform/health-check/healthcheck.py .
+  - cp platform/ssl-expire-check/sslexpirecheck.py .
+  - zip -r platform/health-check/healthcheck.zip healthcheck.py
+  - zip -r platform/ssl-expire-check/sslexpirecheck.zip sslexpirecheck.py
+  - terraform apply --var-file ${ENVIRONMENT}.tfvars
+  - sh manage_protection.sh create
+  stage: apply
+
+.destroy_common: &destroy_common
+  <<: *common
+  script:
+  - export elb_external_arn=`terraform output elb_external_arn`
+  - export elb_internal_arn=`terraform output elb_internal_arn`
+  - sh manage_protection.sh delete ${elb_external_arn} ${elb_internal_arn}
+  - terraform destroy --force --var-file ${ENVIRONMENT}.tfvars
+  stage: destroy
+
+
+dev_team8-plan:
+  <<: *plan_common
+  variables:
+    TF_VAR_aws_access_key: $DEV_ACCESS_KEY
+    TF_VAR_aws_secret_key: $DEV_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $DEV_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $DEV_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: dev_team8
+    STATE_FILE: KEY_FOLDER/terraform.state
+
+
+dev_teamlatest-plan:
+  <<: *plan_common
+  variables:
+    TF_VAR_aws_access_key: $DEV_ACCESS_KEY
+    TF_VAR_aws_secret_key: $DEV_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $DEV_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $DEV_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: dev_teamlatest
+    STATE_FILE: KEY_FOLDER/terraform.state
+
+dev_team8-apply:
+  <<: *apply_common
+  variables:
+    TF_VAR_aws_access_key: $DEV_ACCESS_KEY
+    TF_VAR_aws_secret_key: $DEV_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $DEV_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $DEV_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: dev_team8
+    STATE_FILE: KEY_FOLDER/terraform.state
+
+dev_teamlatest-apply:
+  <<: *apply_common
+  variables:
+    TF_VAR_aws_access_key: $DEV_ACCESS_KEY
+    TF_VAR_aws_secret_key: $DEV_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $DEV_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $DEV_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: dev_teamlatest
+    STATE_FILE: KEY_FOLDER/terraform.state
+
+dev_team8-update:
+  <<: *update_common
+  variables:
+    TF_VAR_aws_access_key: $DEV_ACCESS_KEY
+    TF_VAR_aws_secret_key: $DEV_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $DEV_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $DEV_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: dev_team8
+    STATE_FILE: KEY_FOLDER/terraform.state
+
+
+dev_teamlatest-update:
+  <<: *update_common
+  variables:
+    TF_VAR_aws_access_key: $DEV_ACCESS_KEY
+    TF_VAR_aws_secret_key: $DEV_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $DEV_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $DEV_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: dev_teamlatest
+    STATE_FILE: KEY_FOLDER/terraform.state
+
+dev_team8-destroy:
+  <<: *destroy_common
+  variables:
+    TF_VAR_aws_access_key: $DEV_ACCESS_KEY
+    TF_VAR_aws_secret_key: $DEV_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $DEV_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $DEV_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: dev_team8
+    STATE_FILE: KEY_FOLDER/terraform.state
+
+dev_teamlatest-destroy:
+  <<: *destroy_common
+  variables:
+    TF_VAR_aws_access_key: $DEV_ACCESS_KEY
+    TF_VAR_aws_secret_key: $DEV_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $DEV_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $DEV_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: dev_teamlatest
+    STATE_FILE: KEY_FOLDER/terraform.state
+
+prod-region_name-plan:
+  <<: *plan_common
+  variables:
+    TF_VAR_aws_access_key: $PROD_ACCESS_KEY
+    TF_VAR_aws_secret_key: $PROD_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $PROD_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $PROD_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: prod
+    STATE_FILE: KEY_FOLDER/terraform.state
+  only:
+  - master
+
+prod-region_name-apply:
+  <<: *apply_common
+  variables:
+    TF_VAR_aws_access_key: $PROD_ACCESS_KEY
+    TF_VAR_aws_secret_key: $PROD_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $PROD_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $PROD_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: prod
+    STATE_FILE: KEY_FOLDER/terraform.state
+  only:
+  - master
+
+prod-region_name-update:
+  <<: *update_common
+  variables:
+    TF_VAR_aws_access_key: $PROD_ACCESS_KEY
+    TF_VAR_aws_secret_key: $PROD_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $PROD_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $PROD_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: prod
+    STATE_FILE: KEY_FOLDER/terraform.state
+  only:
+  - master
+
+prod-region_name-destroy:
+  <<: *destroy_common
+  variables:
+    TF_VAR_aws_access_key: $PROD_ACCESS_KEY
+    TF_VAR_aws_secret_key: $PROD_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $PROD_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $PROD_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: prod
+    STATE_FILE: MS-RABBITMQ-PROD/terraform.state
+  only:
+  - master
+
+prodB-region_name-plan:
+  <<: *plan_common
+  variables:
+    TF_VAR_aws_access_key: $PROD_B_ACCESS_KEY
+    TF_VAR_aws_secret_key: $PROD_B_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $PROD_B_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $PROD_B_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: prodb
+    STATE_FILE: KEY_FOLDER/terraform.state
+  only:
+  - master
+
+prodB-region_name-apply:
+  <<: *apply_common
+  variables:
+    TF_VAR_aws_access_key: $PROD_B_ACCESS_KEY
+    TF_VAR_aws_secret_key: $PROD_B_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $PROD_B_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $PROD_B_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: prodb
+    STATE_FILE: KEY_FOLDER/terraform.state
+  only:
+  - master
+
+prodB-region_name-update:
+  <<: *update_common
+  variables:
+    TF_VAR_aws_access_key: $PROD_B_ACCESS_KEY
+    TF_VAR_aws_secret_key: $PROD_B_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $PROD_B_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $PROD_B_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: prodb
+    STATE_FILE: KEY_FOLDER/terraform.state
+  only:
+  - master
+
+prodB-region_name-destroy:
+  <<: *destroy_common
+  variables:
+    TF_VAR_aws_access_key: $PROD_B_ACCESS_KEY
+    TF_VAR_aws_secret_key: $PROD_B_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $PROD_B_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $PROD_B_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: prodb
+    STATE_FILE: KEY_FOLDER/terraform.state
+  only:
+  - master
+
+int-region_name-plan:
+  <<: *plan_common
+  variables:
+    TF_VAR_aws_access_key: $INT_ACCESS_KEY
+    TF_VAR_aws_secret_key: $INT_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $INT_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $INT_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: int
+    STATE_FILE: KEY_FOLDER/terraform.state
+
+
+int-region_name-apply:
+  <<: *apply_common
+  variables:
+    TF_VAR_aws_access_key: $INT_ACCESS_KEY
+    TF_VAR_aws_secret_key: $INT_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $INT_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $INT_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: int
+    STATE_FILE: KEY_FOLDER/terraform.state
+
+
+int-region_name-update:
+  <<: *update_common
+  variables:
+    TF_VAR_aws_access_key: $INT_ACCESS_KEY
+    TF_VAR_aws_secret_key: $INT_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $INT_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $INT_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: int
+    STATE_FILE: KEY_FOLDER/terraform.state
+
+
+int-region_name-destroy:
+  <<: *destroy_common
+  variables:
+    TF_VAR_aws_access_key: $INT_ACCESS_KEY
+    TF_VAR_aws_secret_key: $INT_SECRET_KEY
+    AWS_ACCESS_KEY_ID: $INT_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $INT_SECRET_KEY
+    AWS_REGION: region_name
+    ENVIRONMENT: int
+    STATE_FILE: KEY_FOLDER/terraform.state
+

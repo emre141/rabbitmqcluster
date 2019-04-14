@@ -1,0 +1,26 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "ssm:SendCommand",
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:ec2:<region_name>-1:${account_id}:instance/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "ec2:ResourceTag/*": [
+            "${resourcetag}"
+          ]
+        }
+      }
+    },
+    {
+      "Action": "ssm:SendCommand",
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:ssm:<region_name>:*:document/AWS-RunShellScript"
+      ]
+    }
+  ]
+}

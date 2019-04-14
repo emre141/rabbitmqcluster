@@ -1,0 +1,80 @@
+# {{ ansible_managed }}
+# RabbitMQ config file to be placed in /etc/rabbitmq/rabbitmq.config
+
+# RabbitMQ AMQP listening port:
+listeners.tcp.default = {{ rabbitmq_amqp_port }}
+
+# Maximum allowed channels, 0 means unlimited:
+channel_max = {{ rabbitmq_max_channels }}
+
+
+### Loglevel:
+log.console.level = {{ log_console_level| lower }}
+log.console = {{ log_console | lower }}
+log.connection.level = {{ log_connection_level |lower }}
+log.channel.level = {{ log_channel_level |lower }}
+log.queue.level = {{ log_queue_level |lower  }}
+log.file = {{ log_file  }}
+log.file.level = {{ rabbitmq_log_level | lower}}
+log.dir = {{ log_dir }}
+
+
+{% for tag in rabbitmq_default_user_tags %}
+default_user_tags.{{ tag }} = true
+{% endfor %}
+
+
+{% if rabbitmq_loopback_users|length == 0 %}
+loopback_users = none
+{% endif %}
+
+
+# Memory and disk usage warn levels:
+disk_free_limit.absolute = {{ rabbitmq_disk_free_limit }}
+
+
+### AWS Peer Discovery Plugin Parameter ###
+cluster_formation.peer_discovery_backend = {{ rabbit_peer_discovery_aws }}
+cluster_formation.aws.region = {{ aws_region  }}
+cluster_formation.aws.access_key_id = {{ aws_access_key  }}
+cluster_formation.aws.secret_key = {{ aws_secret_key }}
+cluster_formation.aws.use_autoscaling_group = {{ use_autoscaling_group | lower }}
+cluster_formation.randomized_startup_delay_range.min = 5
+cluster_formation.randomized_startup_delay_range.max = 60
+cluster_formation.node_cleanup.only_log_warning = true
+cluster_partition_handling = {{ cluster_partition_handling }}
+
+
+### MQTT ###
+mqtt.allow_anonymous = false
+
+### RabbitMQ Performance Tunning Parameter ###
+
+num_acceptors.tcp = {{ num_acceptors_tcp }}
+vm_memory_high_watermark.relative = {{ rabbitmq_high_watermark }}
+vm_memory_high_watermark_paging_ratio = {{ rabbitmq_high_watermark_paging }}
+hipe_compile = {{ hipe_compile | lower }}
+mqtt.subscription_ttl = {{ mqtt_subscription_ttl }}
+mqtt.tcp_listen_options.sndbuf = {{ mqtt_tcp_listen_options_sndbuf }}
+mqtt.tcp_listen_options.recbuf = {{ mqtt_tcp_listen_options_recbuf }}
+mqtt.listeners.tcp.default = {{ mqtt_listeners_tcp_default }}
+mqtt.listeners.ssl = {{  mqtt_listeners_ssl | lower }}
+mqtt.tcp_listen_options.backlog = {{ mqtt_tcp_listen_options_backlog }}
+mqtt.tcp_listen_options.nodelay = {{ mqtt_tcp_listen_options_nodelay | lower }}
+mqtt.tcp_listen_options.linger.timeout = {{ mqtt_tcp_listen_options_linger_timeout }}
+mqtt.tcp_listen_options.linger.on = {{ mqtt_tcp_listen_options_linger_on | lower }}
+
+
+### HTTP AUTH BACKEND ###
+auth_backends.1 = {{ auth_backends_1 |lower }}
+auth_backends.2 = {{ auth_backends_2 |lower }}
+auth_cache.cached_backend = {{ auth_cache_cached_backend |lower }}
+auth_http.http_method = {{ auth_http_http_method |lower }}
+auth_cache.cache_ttl = {{ auth_cache }}
+collect_statistics_interval = {{ collect_statics }}
+
+auth_http.user_path = https://hostname.domain.{{ accountdomain }}.domain.com/auth_user
+auth_http.vhost_path = https://hostname.domain.{{ accountdomain }}.domain.com/auth_vhost
+auth_http.resource_path = https://hostname.domain.{{ accountdomain }}.domain.com/auth_resource
+auth_http.topic_path = https://hostname.domain.{{ accountdomain }}.domain.com/auth_topic
+

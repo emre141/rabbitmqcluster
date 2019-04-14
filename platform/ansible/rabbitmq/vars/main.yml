@@ -1,0 +1,22 @@
+---
+# vars file for rabbitmq role
+account_domains:
+  dev-team8:
+    domain: -dev
+    team: team8
+  dev-teamlatest:
+    domain: -dev
+    team: latest
+  int:
+    domain: -int
+    team: ""
+  prodb:
+    domain: -b
+    team: ""
+  prod:
+    domain: ""
+    team: ""
+
+
+
+
