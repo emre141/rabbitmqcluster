@@ -202,7 +202,8 @@ resource "aws_cloudwatch_event_target" "event_target" {
   input = <<INPUT
   {
     "url_name": "${var.domainname}",
-    "sns_topic_arn": "${aws_sns_topic.ssl_expire_alarm_topic.arn}"
+    "sns_topic_arn": "${aws_sns_topic.ssl_expire_alarm_topic.arn}",
+    "service_name": "${var.service_name}"
   }
 INPUT
 }
